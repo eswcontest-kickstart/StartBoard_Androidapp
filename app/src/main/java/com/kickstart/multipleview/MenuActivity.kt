@@ -3,21 +3,27 @@ package com.kickstart.multipleview
 import android.graphics.Color
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
+import android.os.StrictMode
 import android.os.SystemClock
+import android.provider.ContactsContract.Data
 import android.widget.SeekBar
 import com.github.mikephil.charting.components.YAxis
 import com.github.mikephil.charting.data.Entry
 import com.github.mikephil.charting.data.LineData
 import com.github.mikephil.charting.data.LineDataSet
 import com.google.gson.Gson
+import com.google.gson.GsonBuilder
+import com.google.gson.JsonIOException
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import kotlinx.android.synthetic.main.activity_menu.*
 import kotlinx.android.synthetic.main.activity_menu.view.*
 import java.io.BufferedReader
+import java.io.IOException
 import java.io.InputStreamReader
-import java.net.HttpURLConnection
-import java.net.URL
+import java.net.*
+import java.nio.charset.Charset
+import java.nio.charset.StandardCharsets
 
 class MenuActivity : AppCompatActivity() {
 //    var numDriver : Int = 0
@@ -93,14 +99,14 @@ class MenuActivity : AppCompatActivity() {
             }
         })
 
-        if (isrunning == false) {
+        if (!isrunning) {
             isrunning = true
-            var scaleThrd = this.ScaleThread()
-            scaleThrd.start ()
+            var scaleThread = this.ScaleThread()
+            scaleThread.start()
             var helmetThread = this.HelmetThread()
             helmetThread.start()
             var startButtonThread = this.StartButtonThread()
-            startButtonThread.start ()
+            startButtonThread.start()
         }
     }
 
@@ -135,7 +141,7 @@ class MenuActivity : AppCompatActivity() {
                         runOnUiThread {
                             editTextTextPersonName5.setBackgroundResource(R.drawable.rect4)
                             imageView2.setBackgroundResource(R.drawable.blackcircle)
-                            window.statusBarColor = 4278190080.toInt()
+                            window.statusBarColor = Color.BLACK
                         }
                     }
                 }
@@ -147,17 +153,29 @@ class MenuActivity : AppCompatActivity() {
     inner class HelmetThread: Thread () {
 
         override fun run() {
+            var socket = DatagramSocket()
+            socket.broadcast = true
+            socket.soTimeout = 2
+
+            var helmetStats = 1
             while (!stopped) {
                 SystemClock.sleep(500)
-                val helmetStats = readHelmetInfo()
+
+                try {
+                    helmetStats = readHelmetUDP(socket)
+                } catch (e: SocketTimeoutException) {
+                    socket = DatagramSocket()
+
+                }
+
+
+                //val helmetStats = readHelmetInfo()
                 //val helmetStats = readHelmetInfoRandom()
                 if (helmetStats == 1) {
                     runOnUiThread {
                         helmetText.text = "미착용"
                         editTextTextPersonName5.setBackgroundResource(R.drawable.rect2)
                         imageView2.setBackgroundResource(R.drawable.yellowcircle)
-                        window.statusBarColor = 4294955016.toInt()
-
 
                     }
                     helmetOn = false
@@ -167,7 +185,6 @@ class MenuActivity : AppCompatActivity() {
                         helmetText.text = "오착용"
                         editTextTextPersonName5.setBackgroundResource(R.drawable.rect2)
                         imageView2.setBackgroundResource(R.drawable.yellowcircle)
-                        window.statusBarColor = 4294955016.toInt()
                     }
                     helmetOn = false
                 }
@@ -177,8 +194,6 @@ class MenuActivity : AppCompatActivity() {
                         if (helmetText.text != "착용")
                             editTextTextPersonName5.setBackgroundResource(R.drawable.rect1)
                             imageView2.setBackgroundResource(R.drawable.greencircle)
-                        window.statusBarColor = 4290570965.toInt()
-
                         helmetText.text = "착용"
                     }
                     helmetOn = true
@@ -193,15 +208,12 @@ class MenuActivity : AppCompatActivity() {
                         runOnUiThread {
                             editTextTextPersonName5.setBackgroundResource(R.drawable.rect3)
                             imageView2.setBackgroundResource(R.drawable.redcircle)
-                            window.statusBarColor = 4294530132.toInt()
-
                         }
                     }
                     else {
                         runOnUiThread {
                             editTextTextPersonName5.setBackgroundResource(R.drawable.rect1)
                             imageView2.setBackgroundResource(R.drawable.greencircle)
-                            window.statusBarColor = 4290570965.toInt()
                         }
                     }
                 }
@@ -267,6 +279,47 @@ class MenuActivity : AppCompatActivity() {
             }
 
         }
+        fun readHelmetUDP(socket: DatagramSocket): Int {
+            // Hack Prevent crash (sending should be done using an async task)
+            val policy = StrictMode.ThreadPolicy.Builder().permitAll().build()
+
+            val RemoteHost = "192.168.100.7"
+            val RemotePort = 2391
+
+            StrictMode.setThreadPolicy(policy)
+            try {
+                //Open a port to send the package
+
+                val sendData = "Hello".toByteArray()
+                val sendPacket = DatagramPacket(sendData, sendData.size, InetAddress.getByName(RemoteHost), RemotePort)
+
+                socket.send(sendPacket)
+                println("fun sendBroadcast: packet sent to: " + InetAddress.getByName(RemoteHost) + ":" + RemotePort)
+
+                val Buffer = ByteArray(1024)
+                val packet = DatagramPacket(Buffer, Buffer.size)
+                socket.receive(packet)
+                var data = packet.data.toString(StandardCharsets.UTF_8)
+
+                val slashIndex = data.indexOf("}")
+                data = data.substring(0, slashIndex+1)
+                println("----> $data")
+
+                val gson = GsonBuilder().setLenient().create()
+                val resultMap = gson.fromJson<HashMap<String, Double>>(data, HashMap::class.java)
+
+                val stats_val: Double? = resultMap.get("helmet_stats")
+                if (stats_val == null)
+                    return 1
+                else
+                    return stats_val.toInt()
+
+
+            } catch (e: IOException) {
+                //            Log.e(FragmentActivity.TAG, "IOException: " + e.message)
+                return 1
+            }
+        }
     }
 
 
@@ -275,6 +328,72 @@ class MenuActivity : AppCompatActivity() {
             val randNum = Math.random() * 10 + randomLevel
             return randNum
         }
+
+        var lastScale1 = 0.0;
+        var lastScale2 = 0.0;
+
+
+        fun readScaleUDP(socket: DatagramSocket): Double {
+            // Hack Prevent crash (sending should be done using an async task)
+//            val policy = StrictMode.ThreadPolicy.Builder().permitAll().build()
+//
+//            StrictMode.setThreadPolicy(policy)
+            try {
+                //Open a port to send the package
+
+                val RemoteHost = "192.168.100.9"    // ScaleSensor Target IP
+                val RemotePort = 2390               // ScaleSensor Target Port
+
+                val sendData = "Hello".toByteArray()
+                val sendPacket = DatagramPacket(sendData, sendData.size, InetAddress.getByName(RemoteHost), RemotePort)
+
+                socket.send(sendPacket)
+                println("fun sendBroadcast: packet sent to: " + InetAddress.getByName(RemoteHost) + ":" + RemotePort)
+
+                val Buffer = ByteArray(1024)
+                val packet = DatagramPacket(Buffer, Buffer.size)
+                socket.receive(packet)
+                var data = packet.data.toString(StandardCharsets.UTF_8)
+
+                val slashIndex = data.indexOf("}")
+                data = data.substring(0, slashIndex+1)
+                println("----> $data")
+
+                val gson = GsonBuilder().setLenient().create()
+                val resultMap = gson.fromJson<HashMap<String, Double>>(data, HashMap::class.java)
+
+                var scale1: Double? = resultMap.get("scale1")
+                var scale2: Double? = resultMap.get("scale2")
+//                if (scale1 == null)
+//                    scale1 = 0.0
+//                if (scale2 == null)
+//                    scale2 = 0.0
+                if (scale1 == null) {
+                    scale1 = lastScale1
+                }
+                else if (scale1 != 0.0) {
+                    lastScale1 = scale1
+                }
+
+                if (scale2 == null) {
+                    scale2 = lastScale2
+                }
+                else if (scale1 != 0.0) {
+                    lastScale2 = scale2
+                }
+
+                println("scale = $scale1 $scale2 from Device")
+
+                return scale1 + scale2
+
+
+            } catch (e: IOException) {
+                println(e.message)
+                return lastScale1 + lastScale2
+            }
+        }
+
+
         fun readScale(): Double {
 
 //            val randNum = Math.random() * 10 + randomLevel
@@ -343,11 +462,24 @@ class MenuActivity : AppCompatActivity() {
                 lineChart.animateX(100)
             }
 
+            var socket = DatagramSocket()
+            socket.broadcast = true
+            socket.soTimeout = 2
+
+            var scale = 0.0
+
             var i = 0
             while (!stopped) {
-                SystemClock.sleep(200)
+                SystemClock.sleep(250)
+                try {
+                    scale = readScaleUDP(socket)
 
-                val scale = readScale() //readScaleRandom()
+
+                } catch (e: SocketTimeoutException) {
+                    socket = DatagramSocket()
+
+                }
+                //readScale() //readScaleRandom()
                 scaleManager.addScale(scale)
 
                 if (scaleManager.isStable()) {
