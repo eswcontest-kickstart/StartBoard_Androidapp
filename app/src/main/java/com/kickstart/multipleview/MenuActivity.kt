@@ -141,7 +141,7 @@ class MenuActivity : AppCompatActivity() {
                         runOnUiThread {
                             editTextTextPersonName5.setBackgroundResource(R.drawable.rect4)
                             imageView2.setBackgroundResource(R.drawable.blackcircle)
-                            window.statusBarColor = Color.BLACK
+                            window.statusBarColor = 4278190080.toInt()
                         }
                     }
                 }
@@ -176,6 +176,7 @@ class MenuActivity : AppCompatActivity() {
                         helmetText.text = "미착용"
                         editTextTextPersonName5.setBackgroundResource(R.drawable.rect2)
                         imageView2.setBackgroundResource(R.drawable.yellowcircle)
+                        window.statusBarColor = 4294955016.toInt()
 
                     }
                     helmetOn = false
@@ -185,6 +186,8 @@ class MenuActivity : AppCompatActivity() {
                         helmetText.text = "오착용"
                         editTextTextPersonName5.setBackgroundResource(R.drawable.rect2)
                         imageView2.setBackgroundResource(R.drawable.yellowcircle)
+                        window.statusBarColor = 4294955016.toInt()
+
                     }
                     helmetOn = false
                 }
@@ -194,6 +197,8 @@ class MenuActivity : AppCompatActivity() {
                         if (helmetText.text != "착용")
                             editTextTextPersonName5.setBackgroundResource(R.drawable.rect1)
                             imageView2.setBackgroundResource(R.drawable.greencircle)
+                            window.statusBarColor = 4290570965.toInt()
+
                         helmetText.text = "착용"
                     }
                     helmetOn = true
@@ -208,12 +213,14 @@ class MenuActivity : AppCompatActivity() {
                         runOnUiThread {
                             editTextTextPersonName5.setBackgroundResource(R.drawable.rect3)
                             imageView2.setBackgroundResource(R.drawable.redcircle)
+                            window.statusBarColor = 4294530132.toInt()
                         }
                     }
                     else {
                         runOnUiThread {
                             editTextTextPersonName5.setBackgroundResource(R.drawable.rect1)
                             imageView2.setBackgroundResource(R.drawable.greencircle)
+                            window.statusBarColor = 4290570965.toInt()
                         }
                     }
                 }
